@@ -32,3 +32,9 @@ Follow-up fixes
 - Tests: 367 passed, 0 failed (npm test). Android JS bundle (Hermes) compiles via `expo export`.
 - NOT DONE: signed release APK. No Android SDK in the authoring environment; build with the GitHub workflow (.github/workflows/build.yml).
   Device checks (install, launch, chart, no black chart, live connection) are still pending.
+
+Fixes after first phone test
+- Global context: each row now shows the change in points AND percent (e.g. +0.52 (+0.49%)).
+- Chart tab: now scrolls (was a fixed view, so controls below the chart were unreachable). Horizontal drag uses the gesture's own dx and pauses page scrolling while you drag.
+- Option chain: large numbers shrink to fit instead of "14.36...".
+- Header: duplicate MARKET CLOSED pill removed; detail lines collapse (tap "details").

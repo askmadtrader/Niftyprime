@@ -28,7 +28,8 @@ export default function GlobalCard() {
                   : !g ? <Text style={s.na}>loading...</Text>
                   : d && !d.error ? (
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[s.val, num, gf && gf.status === 'STALE' ? { color: C.muted } : null]}>{f2(d.price)}  <Text style={{ color: tone(d.pct) }}>{signed(d.pct)}%</Text></Text>
+                      <Text style={[s.val, num, gf && gf.status === 'STALE' ? { color: C.muted } : null]}>{f2(d.price)}</Text>
+                      <Text style={[s.chg, num, { color: tone(d.chg) }]}>{signed(d.chg)}  ({signed(d.pct)}%)</Text>
                       <Text style={s.na}>{gf && gf.marketTs ? `${gf.status === 'STALE' ? 'LAST CLOSE ' : ''}${fmtDMY(gf.tradingDate)} ${fmtHM(gf.marketTs)} IST` : 'timestamp invalid'}</Text>
                     </View>
                   ) : <Text style={s.na}>DATA UNAVAILABLE</Text>}
@@ -48,5 +49,6 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   name: { color: C.text, fontSize: 14 },
   val: { color: C.text, fontSize: 14, fontWeight: '700' },
+  chg: { fontSize: 13, fontWeight: '700' },
   na: { color: C.muted, fontSize: 12 },
 });

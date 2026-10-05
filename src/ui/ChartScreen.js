@@ -113,7 +113,7 @@ export default function ChartScreen({ embedded = false } = {}) {
   const [view, setViewState] = useState(null);
   const base = view && view.gen === chart.gen ? view : null;
   const eff = n >= 1 ? clampView(base || defaultView(n, stats ? stats.count : 0), n) : null;
-  const viewRef = useRef(null), nRef = useRef(0), gRef = useRef({ last: null, pinch: null }).current;
+  const viewRef = useRef(null), nRef = useRef(0), gRef = useRef({ last: null, pinch: null, dx: 0 }).current;
   viewRef.current = eff; nRef.current = n;
   const setView = (v) => { viewRef.current = v; setViewState({ ...v, gen: store.get().chart.gen }); };
 
@@ -123,16 +123,17 @@ export default function ChartScreen({ embedded = false } = {}) {
   const H = Math.round(Math.max(280, Math.min(460, winH * 0.46)));
   const plotW = () => Math.max(1, wRef.current - PAD.l - PAD.r);
 
+  useEffect(() => () => { store.set({ scrollLocked: false }); }, []);
   const responder = useMemo(() => {
-    const wants = (e, g) => e.nativeEvent.touches.length >= 2 || (Math.abs(g.dx) > 5 && Math.abs(g.dx) > Math.abs(g.dy));
-    const end = () => { gRef.last = null; gRef.pinch = null; setLocked(false); };
+    const wants = (e, g) => (e.nativeEvent.touches || []).length >= 2 || (Math.abs(g.dx) > 3 && Math.abs(g.dx) > Math.abs(g.dy));
+    const end = () => { gRef.last = null; gRef.pinch = null; gRef.dx = 0; setLocked(false); store.set({ scrollLocked: false }); };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: wants,
       onMoveShouldSetPanResponderCapture: wants,       // beat the page ScrollView to horizontal drags and pinches
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => { gRef.last = null; gRef.pinch = null; setLocked(true); },
-      onPanResponderMove: (e) => {
+      onPanResponderGrant: () => { gRef.last = null; gRef.pinch = null; gRef.dx = 0; setLocked(true); store.set({ scrollLocked: true }); },
+      onPanResponderMove: (e, g) => {
         const ts = e.nativeEvent.touches, v = viewRef.current, N = nRef.current;
         if (!ts || !ts.length || !v || N < 2) return;
         if (ts.length >= 2) {
@@ -146,9 +147,9 @@ export default function ChartScreen({ embedded = false } = {}) {
           setView(zoomView(p.v0, p.v0.count * (p.d0 / d), p.f, N));   // fingers apart => fewer candles (zoom in)
         } else {
           gRef.pinch = null;
-          const x = ts[0].pageX;
-          if (gRef.last !== null) setView(panView(v, x - gRef.last, plotW(), N));  // drag right => older candles
-          gRef.last = x;
+          const step = g.dx - (gRef.dx || 0);                                      // use the gesture's own dx: no reliance on pageX
+          gRef.dx = g.dx;
+          if (step) setView(panView(v, step, plotW(), N));                          // drag right => older candles
         }
       },
       onPanResponderRelease: end,

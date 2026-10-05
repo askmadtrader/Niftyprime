@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, num } from '../theme';
 import { store, deriveStatus } from '../controller';
@@ -29,6 +29,7 @@ export default function TopBar() {
   const info = useStore(store, (s) => s.candlesInfo);
   const lastOk = useStore(store, (s) => s.lastOk);
   const [, setTick] = useState(0);
+  const [open, setOpen] = useState(false);
   useEffect(() => { const id = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(id); }, []);
   const st = deriveStatus({ conn, feed, market, niftyFresh: nf });
   const live = st.key === 'LIVE';
@@ -55,26 +56,32 @@ export default function TopBar() {
       </View>
       <View style={[s.row, { marginTop: 8, alignItems: 'center' }]}>
         <Pill text={st.key} color={st.color} solid />
-        <View style={{ width: 6 }} />
-        <Pill text={MARKET_STATE_LABEL[market.state] || market.state} color={market.state === 'NORMAL_OPEN' ? 'green' : 'muted'} />
+        {(MARKET_STATE_LABEL[market.state] || market.state) !== st.key ? (
+          <>
+            <View style={{ width: 6 }} />
+            <Pill text={MARKET_STATE_LABEL[market.state] || market.state} color={market.state === 'NORMAL_OPEN' ? 'green' : 'muted'} />
+          </>
+        ) : null}
         <View style={{ flex: 1 }} />
         <Text style={[s.ts, num]}>{nifty ? `Received ${fmtTime(nifty.receivedAt)}` : 'Received --'}</Text>
       </View>
       {st.sub ? <Text style={[s.ts, { marginTop: 3, color: C.amber }]}>{st.sub}</Text> : null}
-      {nifty ? (
+      <Pressable onPress={() => setOpen(!open)} hitSlop={6}>
+        <Text style={[s.ts, num, { marginTop: 3, color: C.text, fontWeight: '700' }]}>{nd.asOf}  {open ? '\u25B2' : '\u25BC details'}</Text>
+      </Pressable>
+      {open && nifty ? (
         <Text style={[s.ts, num, { marginTop: 3 }]}>
           NIFTY: <Text style={{ color: prevSession(nd) ? C.amber : C.green, fontWeight: '800' }}>{nd.badge}</Text>{nd.tradingDate ? ` \u00b7 ${fmtDMY(nd.tradingDate)}` : ''}{prevSession(nd) ? `  (${nd.label})` : ''}
         </Text>
       ) : null}
-      {vix ? (
+      {open && vix ? (
         <Text style={[s.ts, num]}>
           VIX: <Text style={{ color: prevSession(vd) ? C.amber : C.green, fontWeight: '800' }}>{vd.badge}</Text>{vd.tradingDate ? ` \u00b7 ${fmtDMY(vd.tradingDate)}` : ''}  {vd.status}
         </Text>
       ) : null}
-      <Text style={[s.ts, num, { marginTop: 3, color: C.text, fontWeight: '700' }]}>{nd.asOf}</Text>
-      <Text style={[s.ts, num, { marginTop: 3 }]}>
+      {open ? <Text style={[s.ts, num, { marginTop: 3 }]}>
         {info.lastT ? `Candles: ${info.label} (last ${fmtHM(info.lastT)})` : 'Candles: none'} | Last OK {lastOk ? fmtTime(lastOk) : '--'} IST
-      </Text>
+      </Text> : null}
     </View>
   );
 }

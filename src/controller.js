@@ -29,7 +29,7 @@ export const store = createStore({
   // ---- live market-data foundation (Upstox V3 WebSocket). `market` is the exchange state from market_info.
   feed: { conn: 'DISCONNECTED', connMsg: '', attempt: 0 },
   market: { state: MS.UNKNOWN, index: MS.UNKNOWN, fno: MS.UNKNOWN, eq: MS.UNKNOWN, source: null }, marketInfoAt: 0,
-  nifty: null, vix: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, sNow: Date.now(), clockSynced: false,
+  scrollLocked: false, nifty: null, vix: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, sNow: Date.now(), clockSynced: false,
   candles: [], candlesInfo: { kind: SESSION.INVALID, date: null, lastT: 0, count: 0, label: 'NO DATA', usable: false }, candlesAt: 0,
   contracts: [], contractsAt: 0, contractsErr: '', pairs: [], expiries: [], expiry: null, chain: null, chainExpiry: null, chainInfo: null, chainAt: 0, chainMarketState: MS.UNKNOWN, chainErr: '', pcrIvHistory: [],
   global: null, globalAt: 0, globalErr: '',

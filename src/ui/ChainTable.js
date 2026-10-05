@@ -14,7 +14,7 @@ const STATUS_COLOR = { [CHAIN_STATUS.LIVE]: 'green', [CHAIN_STATUS.STALE]: 'ambe
 const Cell = memo(function Cell({ text, bold, dim }) {
   return (
     <View style={s.cell}>
-      <Text numberOfLines={1} style={[s.ct, num, bold ? s.bold : null, dim ? { color: C.muted } : null]}>{text}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={[s.ct, num, bold ? s.bold : null, dim ? { color: C.muted } : null]}>{text}</Text>
     </View>
   );
 });
