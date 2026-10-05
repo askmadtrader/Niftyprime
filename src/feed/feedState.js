@@ -47,7 +47,7 @@ export function buildInstrument(key, f, prev, receivedAt, serverTs) {
   };
 }
 
-export function applyFeedResponse(state, resp, receivedAt) {
+export function applyFeedResponse(state, resp, receivedAt, extraKeys = []) {
   const next = { ...state, instruments: { ...state.instruments }, messages: state.messages + 1, lastMessageAt: receivedAt };
   if (validTs(resp.currentTs)) {
     const off = resp.currentTs - receivedAt;
@@ -61,7 +61,7 @@ export function applyFeedResponse(state, resp, receivedAt) {
     }
   }
   Object.keys(resp.feeds || {}).forEach((key) => {
-    if (!WATCH_KEYS.includes(key)) return;
+    if (!WATCH_KEYS.includes(key) && !extraKeys.includes(key)) return;
     const inst = buildInstrument(key, resp.feeds[key], state.instruments[key], receivedAt, resp.currentTs);
     if (inst) next.instruments[key] = inst; else next.invalidTicks += 1;
   });

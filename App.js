@@ -19,24 +19,9 @@ import ChartScreen from './src/ui/ChartScreen';
 import AlertsScreen from './src/ui/AlertsScreen';
 import SettingsScreen from './src/ui/SettingsScreen';
 import LoginScreen from './src/ui/LoginScreen';
+import Dashboard from './src/ui/Dashboard';
 
 const TABS = [['dash', 'Dashboard'], ['chart', 'Chart'], ['alerts', 'Alerts'], ['settings', 'Settings']];
-
-function Dashboard() {
-  const locked = useStore(store, (x) => x.scrollLocked);
-  return (
-    <ScrollView scrollEnabled={!locked} nestedScrollEnabled contentContainerStyle={{ padding: 12, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-      <MarketCard />
-      <SignalCard />
-      <NiftyAnalyticsCard />
-      <ChainTable />
-      <OiAnalysisCard />
-      <PcrIvCard />
-      <ChartScreen embedded />
-      <GlobalCard />
-    </ScrollView>
-  );
-}
 
 function ChartTab() {
   const locked = useStore(store, (x) => x.scrollLocked);

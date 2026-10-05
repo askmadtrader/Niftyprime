@@ -109,6 +109,16 @@ export class FeedClient {
     ws.onclose = (ev) => { if (gen === this.gen) this._onClose(ev); };
   }
 
+  // Subscribe to more instruments on the live socket (and on every reconnect). Idempotent.
+  addKeys(newKeys) {
+    const add = (newKeys || []).filter((k) => typeof k === 'string' && !this.keys.includes(k));
+    if (!add.length) return;
+    this.keys = [...this.keys, ...add];
+    if (this.ws && this.sawData !== undefined && this.state !== 'DISCONNECTED') {
+      try { this.ws.send(encodeRequest({ guid: this._guid(), method: 'sub', data: { mode: this.cfg.mode, instrumentKeys: add } })); this.log('Extra subscription sent', { keys: add }); } catch (e) { /* re-sent in full on next connect */ }
+    }
+  }
+
   _onOpen() {
     this._set(CONN.CONNECTED, 'Connected, subscribing...');
     this.log('Market feed connected');

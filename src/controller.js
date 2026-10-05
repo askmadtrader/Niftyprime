@@ -1,7 +1,7 @@
 import { Vibration } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { createStore } from './store';
-import { fetchCandles, fetchChartCandles, fetchChartIntraday, fetchChain, fetchContracts, authorizeFeed, NIFTY_KEY, VIX_KEY, ApiError } from './api';
+import { fetchCandles, fetchChartCandles, fetchChartIntraday, fetchChain, fetchContracts, fetchNiftyFutures, authorizeFeed, NIFTY_KEY, VIX_KEY, ApiError } from './api';
 import { validExpiries, pickExpiry, pairsForExpiry } from './contracts';
 import { verifyAgainstContracts, shouldAcceptChain, validSpot } from './chain';
 import { makeSample, pushSample } from './pcriv';
@@ -14,6 +14,8 @@ import { MS, MARKET_STATE_LABEL } from './feed/marketStatus';
 import { flog } from './feed/logger';
 import { deriveStatus } from './feed/status';
 import { fetchGlobal } from './global';
+import { pickNiftyFuture, expiryEndMs } from './futures';
+import { optionKeys, readOptionTicks, overlayChain } from './feed/optlive';
 import { analyze, decide } from './engine';
 import { evaluateSignal, mergeSignalIntoAnalysis, failSafeSignal, withdrawIfStale } from './signalBridge';
 import { detectAlerts, DEFAULT_ALERTS } from './alerts';
@@ -21,7 +23,7 @@ import { detectLevelAlerts, DEFAULT_LEVELS } from './levelAlerts';
 import { istDate } from './util';
 import { mergeCandles, TF_CONFIG } from './chartmath';
 
-const DEFAULT_SETTINGS = { strikes: 10, refreshSec: 5, sens: 'MED', confThr: 60, vibrate: true, alerts: DEFAULT_ALERTS, levels: DEFAULT_LEVELS, expiry: null };
+const DEFAULT_SETTINGS = { strikes: 10, refreshSec: 5, sens: 'MED', confThr: 60, vibrate: true, alerts: DEFAULT_ALERTS, levels: DEFAULT_LEVELS, expiry: null, gift: null };
 
 export const store = createStore({
   ready: false, token: null,
@@ -29,7 +31,7 @@ export const store = createStore({
   // ---- live market-data foundation (Upstox V3 WebSocket). `market` is the exchange state from market_info.
   feed: { conn: 'DISCONNECTED', connMsg: '', attempt: 0 },
   market: { state: MS.UNKNOWN, index: MS.UNKNOWN, fno: MS.UNKNOWN, eq: MS.UNKNOWN, source: null }, marketInfoAt: 0,
-  scrollLocked: false, nifty: null, vix: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, sNow: Date.now(), clockSynced: false,
+  scrollLocked: false, dashOpen: null, fut: null, futFresh: null, futInfo: null, futErr: '', nifty: null, vix: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, sNow: Date.now(), clockSynced: false,
   candles: [], candlesInfo: { kind: SESSION.INVALID, date: null, lastT: 0, count: 0, label: 'NO DATA', usable: false }, candlesAt: 0,
   contracts: [], contractsAt: 0, contractsErr: '', pairs: [], expiries: [], expiry: null, chain: null, chainExpiry: null, chainInfo: null, chainAt: 0, chainMarketState: MS.UNKNOWN, chainErr: '', pcrIvHistory: [],
   global: null, globalAt: 0, globalErr: '',
@@ -38,6 +40,8 @@ export const store = createStore({
   settings: DEFAULT_SETTINGS,
 });
 
+let optKeySet = new Set(), optTicks = {};
+let futKey = null, futDay = '', futTryAt = 0;
 let running = false, timer = null, cycle = 0, backoff = 0, history = [], prevAnalysis = null, globalBusy = false, expDay = '', lastPairsFrom = null;
 const cooldown = {};
 let bannerTimer = null;
@@ -60,7 +64,9 @@ function publishFeed() {
   const nifty = feedState.instruments[NIFTY_KEY] || null;
   const vix = feedState.instruments[VIX_KEY] || null;
   const ms = feedState.market.state;
+  const fut = futKey ? feedState.instruments[futKey] || null : null;
   store.set({
+    fut, futFresh: fut ? computeFreshness({ inst: fut, conn, marketState: ms, now, serverNow: sNow, th: THRESHOLDS.nifty }) : null,
     now, sNow, clockSynced: feedState.clockSynced, market: feedState.market, marketInfoAt: feedState.marketInfoAt,
     nifty, vix, quoteAt: nifty ? nifty.receivedAt : 0,
     niftyFresh: computeFreshness({ inst: nifty, conn, marketState: ms, now, serverNow: sNow, th: THRESHOLDS.nifty }),
@@ -69,6 +75,8 @@ function publishFeed() {
     chainFresh: computeChainFreshness({ chain: store.get().chain, receivedAt: store.get().chainAt, requestedMarketState: store.get().chainMarketState, link: restLink(), marketState: ms, now }),
     feed: { conn, connMsg: feedClient ? feedClient.detail : '', attempt: feedClient ? feedClient.attempt : 0 },
   });
+  // Live option ticks (price / OI / volume) over the REST chain between REST refreshes.
+  { const c0 = store.get(); if (c0.chain && c0.chainExpiry === c0.expiry && ms === MS.OPEN) { const c1 = overlayChain(c0.chain, optTicks, c0.chainAt); if (c1 !== c0.chain) store.set({ chain: c1 }); } }
   // A direction shown from the last cycle is withdrawn as soon as its data stops being current (feed drop, stale quote / candles / chain).
   const cur = store.get().analysis, kept = withdrawIfStale(cur, store.get());
   if (kept !== cur) store.set({ analysis: kept });
@@ -87,20 +95,22 @@ function startFeed() {
   if (!token || feedClient) return;
   feedClient = new FeedClient({
     authorize: () => authorizeFeed(store.get().token),
-    keys: WATCH_KEYS, primaryKey: NIFTY_KEY,
+    keys: futKey ? [...WATCH_KEYS, futKey] : WATCH_KEYS, primaryKey: NIFTY_KEY,
     isMarketOpen: () => feedState.market.state === MS.OPEN,
     onState: (st) => {
       if (st.conn === 'CONNECTED') { // new socket: drop anything received on the previous one
         const { clockOffset, clockSynced } = feedState;
-        feedState = { ...initialFeedState(), clockOffset, clockSynced };
+        feedState = { ...initialFeedState(), clockOffset, clockSynced }; optTicks = {};
       }
       if (st.conn === 'RECONNECTING' || st.conn === 'DISCONNECTED' || st.conn === 'ERROR') flog('Feed state', { conn: st.conn, attempt: st.attempt });
       publishFeed();
     },
     onFeed: (resp, at, err) => {
+      // (futures key, when known, is passed below)
       if (!resp) { feedState = { ...feedState, decodeErrors: feedState.decodeErrors + 1 }; return; }
       const before = feedState.market.state;
-      feedState = applyFeedResponse(feedState, resp, at);
+      feedState = applyFeedResponse(feedState, resp, at, futKey ? [futKey] : []);
+      optTicks = readOptionTicks(optTicks, resp, at, optKeySet);
       if (feedState.market.state !== before) flog('Market state changed', { from: before, to: feedState.market.state });
       schedulePublish();
     },
@@ -113,7 +123,7 @@ function stopFeed() {
   if (publishTimer) { clearTimeout(publishTimer); publishTimer = null; }
   if (feedClient) { feedClient.stop(); feedClient = null; }
   feedState = initialFeedState();
-  store.set({ nifty: null, vix: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, market: feedState.market, feed: { conn: 'DISCONNECTED', connMsg: '', attempt: 0 } });
+  store.set({ nifty: null, vix: null, fut: null, futFresh: null, futInfo: null, quoteAt: 0, niftyFresh: null, vixFresh: null, candlesFresh: null, chainFresh: null, market: feedState.market, feed: { conn: 'DISCONNECTED', connMsg: '', attempt: 0 } });
 }
 
 export async function init() {
@@ -128,7 +138,7 @@ export async function init() {
 export function setToken(t) {
   if (!t) return;
   SecureStore.setItemAsync('nv_token', t).catch(() => {});
-  history = []; prevAnalysis = null; prevLevels = null;
+  history = []; prevAnalysis = null; prevLevels = null; optKeySet = new Set(); optTicks = {}; futKey = null; futDay = ''; futTryAt = 0;
   stopFeed();
   store.set({ pcrIvHistory: [] });
   store.set({ token: t, conn: 'CONNECTING', connMsg: '' });
@@ -187,6 +197,25 @@ async function refreshGlobal() {
   finally { globalBusy = false; }
 }
 
+let lastManual = 0;
+// Manual refresh for one dashboard section. Throttled so repeated taps cannot hit Upstox's rate limit.
+export function refreshNow(kind) {
+  const n = Date.now();
+  if (n - lastManual < 1500) return;
+  lastManual = n;
+  if (kind === 'chart') { loadChart(store.get().chart.tf, { full: true }); return; }
+  if (kind === 'global') { futTryAt = 0; refreshGlobal(); schedule(0); return; }
+  schedule(0); // signal / levels / chain / OI / PCR: run a full cycle now
+}
+export function setDashSection(id) { store.set({ dashOpen: id }); }
+export function setGift(price) {
+  const v = Number(price);
+  if (!Number.isFinite(v) || v < 1000 || v > 100000) return false;
+  updateSettings({ gift: { price: v, at: Date.now() } });
+  return true;
+}
+export function clearGift() { updateSettings({ gift: null }); }
+
 async function tick() {
   if (!running) return;
   const s0 = store.get();
@@ -209,6 +238,20 @@ async function tick() {
         store.set({ contracts, contractsAt: Date.now(), contractsErr: '' });
       } catch (e) { errs.push(e); store.set({ contractsErr: (e && e.message) || 'Option contract error' }); }
     }
+    // NIFTY futures contract: looked up once a day (and again once the held contract has expired), then streamed on the same feed.
+    const fNow = store.get().sNow || Date.now();
+    const fi = store.get().futInfo;
+    const heldOk = !!fi && expiryEndMs(fi.expiry) > fNow && futDay === today;
+    if (!heldOk && Date.now() - futTryAt > 60000) { // on failure retry at most once a minute
+      futTryAt = Date.now();
+      try {
+        const f = pickNiftyFuture(await fetchNiftyFutures(token), fNow);
+        if (!f) throw new ApiError('DATA', 'No NIFTY futures contract returned');
+        futKey = f.key; futDay = today;
+        store.set({ futInfo: f, futErr: '' });
+        if (feedClient) feedClient.addKeys([f.key]);
+      } catch (e) { errs.push(e); futKey = null; store.set({ futInfo: null, futErr: (e && e.message) || 'Futures lookup error' }); }
+    }
     // Recomputed every cycle from the exchange-aligned clock, so an expiry drops out at 15:30 IST on its day
     // and the selection rolls to the nearest valid future expiry without any refetch or restart.
     const cNow = store.get().sNow || Date.now();
@@ -224,7 +267,7 @@ async function tick() {
     store.set({ expiries: expList, expiry, pairs, ...(expChanged ? { chain: null, chainExpiry: null, chainInfo: null, chainAt: 0, pcrIvHistory: [] } : null) });
     if (expChanged) history = [];
     const chainReqState = store.get().market.state; // phase when the chain request is issued (a chain asked for before the open is not live data)
-    const wantCandles = cycle % 2 === 1 || !s0.candles.length;
+    const wantCandles = true;
     const [ch, cd] = await Promise.allSettled([
       expiry ? fetchChain(token, expiry) : Promise.resolve(null),
       wantCandles ? fetchCandles(token, NIFTY_KEY, 1) : Promise.resolve(null),
@@ -240,6 +283,8 @@ async function tick() {
           patch.chain = v.rows; patch.chainExpiry = expiry; patch.chainAt = Date.now(); patch.chainMarketState = chainReqState;
           patch.chainInfo = { total: v.rows.length, dropped, otherExpiry: ch.value.otherExpiry, mismatched: v.mismatched };
           patch.chainErr = v.rows.length ? '' : 'Option chain returned no strikes';
+          { const ks = optionKeys(v.rows, validSpot(store.get().nifty, store.get().niftyFresh), store.get().settings.strikes + 2);
+            if (ks.length && feedClient) { optKeySet = new Set(ks); feedClient.addKeys(ks); } }
         }
       }
     } else { errs.push(ch.reason); patch.chainErr = (ch.reason && ch.reason.message) || 'Option chain error'; }
@@ -254,7 +299,7 @@ async function tick() {
       const sample = makeSample({ rows: patch.chain, expiry, spot: validSpot(c.nifty, c.niftyFresh), at: patch.chainAt });
       if (sample) store.set({ pcrIvHistory: pushSample(c.pcrIvHistory, sample) });
     }
-    if (!store.get().globalAt || now - store.get().globalAt > 60000) refreshGlobal();
+    if (!store.get().globalAt || now - store.get().globalAt > 30000) refreshGlobal();
 
     // ---- analysis on a consistent snapshot: feed state + exchange-aligned clock + single-session candles
     publishFeed();

@@ -103,8 +103,8 @@ export default function ChartScreen({ embedded = false } = {}) {
 
   useEffect(() => {
     if (!token) return undefined;
-    loadChart(tf);                                   // full load the first time, incremental after that
-    const id = setInterval(() => loadChart(tf), 15000);
+    loadChart(tf);
+    const id = setInterval(() => loadChart(tf), 5000);
     return () => clearInterval(id);
   }, [tf, token]);
 

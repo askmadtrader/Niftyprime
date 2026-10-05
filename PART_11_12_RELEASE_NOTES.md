@@ -38,3 +38,21 @@ Fixes after first phone test
 - Chart tab: now scrolls (was a fixed view, so controls below the chart were unreachable). Horizontal drag uses the gesture's own dx and pauses page scrolling while you drag.
 - Option chain: large numbers shrink to fit instead of "14.36...".
 - Header: duplicate MARKET CLOSED pill removed; detail lines collapse (tap "details").
+
+NIFTY Futures
+- Dashboard > Global context > India: "NIFTY Futures" row (nearest unexpired NIFTY index future, looked up daily via Upstox
+  /v2/instruments/search, streamed on the same Market Data Feed). Shows price, change (pts, %), premium vs NIFTY, status and exchange time.
+- GIFT NIFTY stays DATA UNAVAILABLE: it trades on NSE IX and Upstox offers no feed for it.
+- UNVERIFIED against the live API (written from Upstox docs; not testable offline). If the row stays "DATA UNAVAILABLE", check Settings > Debug.
+
+Speed + US futures
+- US FUTURES block (S&P 500, Nasdaq 100, Dow futures via Yahoo, unofficial, may lag a little).
+- Option chain: ATM +/- strikes are streamed on the live feed; ltp / OI / volume update tick-by-tick between REST refreshes (IV, Greeks, bid/ask still REST).
+- Candles refresh every cycle (was every 2nd), chart every 5 s (was 15 s), global every 30 s (was 60 s).
+- GIFT NIFTY: still unavailable (NSE IX, no licensed free feed). Not scraped/guessed.
+- Live option ticks and futures are written from the Upstox docs: UNVERIFIED against the live feed until tested in market hours.
+
+Sectioned dashboard
+- Dashboard is now a list of tiles (Signal, NIFTY levels & momentum, Option chain, Open interest, PCR/IV/Greeks, Chart, Futures/GIFT/global).
+  Each tile shows its own status badge, one-line summary, "as of" time and a refresh button. Tap a tile to open it; Back / Android back returns.
+- GIFT NIFTY: manual entry (MANUAL label, entry time, STALE after 30 min, gap vs NIFTY). Context only: the signal engine does not use it.

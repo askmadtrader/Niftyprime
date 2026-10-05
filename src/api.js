@@ -87,6 +87,16 @@ export async function fetchContracts(token) {
   return parseContracts(data, NIFTY_KEY);
 }
 
+// NIFTY futures contracts (current + next month). Parsing/selection lives in futures.js.
+export async function fetchNiftyFutures(token) {
+  const out = [];
+  for (const expiry of ['current_month', 'next_month']) {
+    const rows = await upstox('/v2/instruments/search', token, { query: 'NIFTY', exchanges: 'NSE', segments: 'FO', instrument_types: 'FUT', expiry, page_number: 1, records: 30 });
+    if (Array.isArray(rows)) out.push(...rows);
+  }
+  return out;
+}
+
 // The real option chain of ONE expiry (GET /v2/option/chain). Returns { rows, rejected, otherExpiry, duplicates }; every row
 // carries the requested expiry. Parsing and validation live in chain.js.
 export async function fetchChain(token, expiry) {
