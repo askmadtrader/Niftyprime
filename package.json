@@ -1,0 +1,29 @@
+{
+  "name": "niftyview",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "expo": "~57.0.26",
+    "expo-keep-awake": "~57.0.2",
+    "expo-linking": "^57.0.11",
+    "expo-secure-store": "^57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "^15.15.4"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "node --import ./tests/register.mjs --test tests/*.test.mjs",
+    "verify:live": "node --import ./tests/register.mjs scripts/verify-live.mjs"
+  },
+  "private": true,
+  "devDependencies": {
+    "protobufjs": "^7.4.0",
+    "ws": "^8.18.0"
+  }
+}
