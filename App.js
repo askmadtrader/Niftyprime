@@ -44,6 +44,7 @@ function Main() {
       {banner ? (
         <Pressable onPress={dismissBanner} style={s.banner}>
           <Text style={s.bt}>{'\u26A0'} {banner.msg}</Text>
+          {banner.tip ? <Text style={s.bs}>{banner.tip}</Text> : null}
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
@@ -95,6 +96,7 @@ const s = StyleSheet.create({
   center: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
   banner: { backgroundColor: C.amber, paddingHorizontal: 14, paddingVertical: 10 },
   bt: { color: '#000', fontWeight: '800', fontSize: 14 },
+  bs: { color: '#000', fontSize: 13, marginTop: 3 },
   tabs: { flexDirection: 'row', backgroundColor: '#0e141b', borderTopWidth: 1, borderColor: C.border },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 14, minHeight: 60 },
   tl: { color: C.muted, fontSize: 16, fontWeight: '800' },

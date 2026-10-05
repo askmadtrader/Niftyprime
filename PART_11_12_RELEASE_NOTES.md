@@ -56,3 +56,10 @@ Sectioned dashboard
 - Dashboard is now a list of tiles (Signal, NIFTY levels & momentum, Option chain, Open interest, PCR/IV/Greeks, Chart, Futures/GIFT/global).
   Each tile shows its own status badge, one-line summary, "as of" time and a refresh button. Tap a tile to open it; Back / Android back returns.
 - GIFT NIFTY: manual entry (MANUAL label, entry time, STALE after 30 min, gap vs NIFTY). Context only: the signal engine does not use it.
+
+v17 (stability pass, analysis only)
+- Signal hold: CALL/PUT is shown only after it holds 90 s (card says "CALL forming: confirming Ns"). HIGH confidence needs 180 s; before that it is capped at MEDIUM. A flicker or a direct CALL->PUT flip restarts the clock. Alerts follow the shown signal, so no whipsaw alerts. (src/stabilize.js)
+- Wall breaks: "Major resistance/support broken" fires only when price is beyond the wall by max(8 pts, 0.04%), not by a 1-2 pt poke. (src/alerts.js)
+- Stale quote: when a live tick has updated an option price, the Recommended card says bid/ask/Greeks are from the last REST refresh (time shown). (optlive.js, engine.js, SignalCard.js)
+- Theta cap: if the recommended contract's theta is over 25% of its premium per day, confidence is capped at MEDIUM with a note. (src/stabilize.js)
+- Alerts: every alert now shows a plain-language "what this means" line (banner + list). Tests: 383 passed.

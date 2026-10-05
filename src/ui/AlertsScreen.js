@@ -3,7 +3,7 @@ import { View, Text, Switch, ScrollView, Pressable, StyleSheet } from 'react-nat
 import { C, num } from '../theme';
 import { store, updateSettings, clearAlerts } from '../controller';
 import { useStore } from '../store';
-import { ALERT_TYPES } from '../alerts';
+import { ALERT_TYPES, tipFor } from '../alerts';
 import { Card, Btn, Note } from './primitives';
 import { LEVEL_RULES } from '../levelAlerts';
 import { fmtTime } from '../util';
@@ -60,6 +60,7 @@ export default function AlertsScreen() {
           <View key={l.id} style={s.log}>
             <Text style={[s.t, num]}>{fmtTime(l.t)}</Text>
             <Text style={s.m}>{l.msg}</Text>
+            {(l.tip || tipFor(l.type)) ? <Text style={s.tip}>{'\u2192'} {l.tip || tipFor(l.type)}</Text> : null}
           </View>
         ))}
         {log.length ? <Btn label="Clear" color={C.card2} style={{ marginTop: 10 }} onPress={clearAlerts} /> : null}
@@ -81,4 +82,5 @@ const s = StyleSheet.create({
   log: { paddingVertical: 6, borderBottomWidth: 1, borderColor: C.border },
   t: { color: C.muted, fontSize: 11 },
   m: { color: C.text, fontSize: 14 },
+  tip: { color: C.amber, fontSize: 13, marginTop: 3 },
 });

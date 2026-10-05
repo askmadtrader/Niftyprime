@@ -38,7 +38,7 @@ const side = (s, t, chainAt) => {
   const k = t[s.key];
   if (!k || k.receivedAt <= chainAt) return s;
   const ltp = k.ltp, oi = k.oi !== null && k.oi !== undefined ? k.oi : s.oi, vol = k.vol !== null && k.vol !== undefined ? k.vol : s.vol;
-  return ltp === s.ltp && oi === s.oi && vol === s.vol ? s : { ...s, ltp, oi, vol };
+  return ltp === s.ltp && oi === s.oi && vol === s.vol ? s : { ...s, ltp, oi, vol, liveAt: k.receivedAt, quoteAt: chainAt };   // bid / ask / IV / Greeks still date from quoteAt
 };
 
 // rows keep their identity when none of their ticks changed, so memoised rows do not re-render.

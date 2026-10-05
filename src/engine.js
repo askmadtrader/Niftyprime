@@ -178,7 +178,7 @@ function recommend(sideName, ch, spot, atmIv) {
   const moneyness = b.dist === 0 ? 'ATM' : (sideName === 'CALL' ? b.r.strike < spot : b.r.strike > spot) ? `ITM (${b.dist} step)` : `OTM (${b.dist} step)`;
   return {
     side: sideName, strike: b.r.strike, key: o.key, ltp: o.ltp, iv: o.iv, delta: o.delta, theta: o.theta, gamma: o.gamma, vega: o.vega,
-    oi: o.oi, vol: o.vol, bid: o.bid, ask: o.ask, spreadPct: b.spreadPct, moneyness, score: b.score,
+    oi: o.oi, vol: o.vol, bid: o.bid, ask: o.ask, spreadPct: b.spreadPct, quoteStale: !!o.liveAt, quoteAt: o.quoteAt || null, moneyness, score: b.score,
     reason: `${moneyness}, delta ${f2(o.delta)} (balanced between cost and responsiveness), spread ${f2(b.spreadPct)}%, OI ${compact(o.oi)}, volume ${compact(o.vol)}, theta ${f2(o.theta, 1)}/day = ${f2(b.thetaPct, 1)}% of premium, IV ${f2(o.iv, 1)}${atmIv ? ` vs ATM ${f2(atmIv, 1)}` : ''}. Within 3 strikes of ATM; no deep OTM.`,
   };
 }

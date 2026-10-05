@@ -57,6 +57,8 @@ export default function SignalCard() {
             <Cell k="Gamma" v={f2(rec.gamma, 4)} /><Cell k="OI" v={compact(rec.oi)} /><Cell k="Volume" v={compact(rec.vol)} />
             <Cell k="Bid" v={f2(rec.bid)} /><Cell k="Ask" v={f2(rec.ask)} /><Cell k="Spread" v={f2(rec.spreadPct) + '%'} />
           </View>
+          {rec.quoteStale ? <Note color={C.amber}>{`Price is live, but bid / ask / Greeks are from the REST refresh at ${rec.quoteAt ? fmtTime(rec.quoteAt) : '--'} IST. The real spread may differ.`}</Note> : null}
+          {a.notes && a.notes.length ? <Note color={C.amber}>{a.notes.join(' ')}</Note> : null}
           <Note>{rec.reason}</Note>
         </Card>
       ) : null}

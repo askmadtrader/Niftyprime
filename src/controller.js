@@ -18,7 +18,8 @@ import { pickNiftyFuture, expiryEndMs } from './futures';
 import { optionKeys, readOptionTicks, overlayChain } from './feed/optlive';
 import { analyze, decide } from './engine';
 import { evaluateSignal, mergeSignalIntoAnalysis, failSafeSignal, withdrawIfStale } from './signalBridge';
-import { detectAlerts, DEFAULT_ALERTS } from './alerts';
+import { detectAlerts, DEFAULT_ALERTS, tipFor } from './alerts';
+import { stabilize, initialStab } from './stabilize';
 import { detectLevelAlerts, DEFAULT_LEVELS } from './levelAlerts';
 import { istDate } from './util';
 import { mergeCandles, TF_CONFIG } from './chartmath';
@@ -42,7 +43,7 @@ export const store = createStore({
 
 let optKeySet = new Set(), optTicks = {};
 let futKey = null, futDay = '', futTryAt = 0;
-let running = false, timer = null, cycle = 0, backoff = 0, history = [], prevAnalysis = null, globalBusy = false, expDay = '', lastPairsFrom = null;
+let running = false, timer = null, cycle = 0, backoff = 0, history = [], prevAnalysis = null, stab = initialStab(), globalBusy = false, expDay = '', lastPairsFrom = null;
 const cooldown = {};
 let bannerTimer = null;
 
@@ -138,7 +139,7 @@ export async function init() {
 export function setToken(t) {
   if (!t) return;
   SecureStore.setItemAsync('nv_token', t).catch(() => {});
-  history = []; prevAnalysis = null; prevLevels = null; optKeySet = new Set(); optTicks = {}; futKey = null; futDay = ''; futTryAt = 0;
+  history = []; prevAnalysis = null; stab = initialStab(); prevLevels = null; optKeySet = new Set(); optTicks = {}; futKey = null; futDay = ''; futTryAt = 0;
   stopFeed();
   store.set({ pcrIvHistory: [] });
   store.set({ token: t, conn: 'CONNECTING', connMsg: '' });
@@ -171,13 +172,13 @@ export function stop() { running = false; if (timer) clearTimeout(timer); timer 
 function schedule(ms) { if (timer) clearTimeout(timer); if (!running) return; timer = setTimeout(tick, ms); }
 
 let prevLevels = null;
-function pushAlert(type, msg, now) {
+function pushAlert(type, msg, now, tip) {
   const s = store.get();
   if (s.settings.alerts[type] === false) return;
   const cd = type.endsWith('Level') ? 0 : type.endsWith('Signal') || type.startsWith('waitTo') ? 30000 : 300000;
   if (cooldown[type] && now - cooldown[type] < cd) return;
   cooldown[type] = now;
-  const item = { id: now + type, type, msg, t: now };
+  const item = { id: now + type, type, msg, tip: tip || '', t: now };
   store.set({ alerts: [item, ...s.alerts].slice(0, 100), banner: item });
   if (s.settings.vibrate) { try { Vibration.vibrate([0, 250, 120, 250]); } catch (e) { /* ignore */ } }
   if (bannerTimer) clearTimeout(bannerTimer);
@@ -316,16 +317,17 @@ async function tick() {
     // Part 10B: the visible signal, probabilities, confidence, reasons and gate status come from the probability signal engine (src/signal.js).
     // The legacy decision above is overridden; the bridge re-validates the result and falls back to a WAIT on any problem. Analysis only.
     a = mergeSignalIntoAnalysis(a, evaluateSignal(s2));
+    { const z = stabilize(stab, a, nowD); stab = z.st; a = z.a; } // v17: hold before showing, confidence caps
     if (a.snapshot && (!history.length || nowD - history[history.length - 1].t >= 15000)) {
       history.push(a.snapshot);
       history = history.filter((h) => nowD - h.t <= 40 * 60000);
     }
-    detectAlerts(prevAnalysis, a).forEach((e) => pushAlert(e.type, e.msg, nowD));
+    detectAlerts(prevAnalysis, a).forEach((e) => pushAlert(e.type, e.msg, nowD, e.tip));
     prevAnalysis = a.live ? a : null;
     // Price / VIX level alerts: only from LIVE/FRESH current-session readings.
     const curLvl = { price: usableForLive(s.niftyFresh, ms) && s.nifty ? s.nifty.ltp : null, vix: vixUse ? vixUse.ltp : null };
     detectLevelAlerts(prevLevels, curLvl, s.settings.levels).forEach((e) => {
-      pushAlert(e.type, e.msg, nowD); // one-shot: disarm the rule that fired
+      pushAlert(e.type, e.msg, nowD, tipFor(e.type)); // one-shot: disarm the rule that fired
       updateSettings({ levels: { ...store.get().settings.levels, [e.id]: null } });
     });
     prevLevels = curLvl;
